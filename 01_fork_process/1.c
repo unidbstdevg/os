@@ -32,9 +32,12 @@ int main(int argc, char* argv[]) {
             // child
             int pid = getpid();
             int ppid = getppid();
-
             printf("child (pid=%i, ppid=%i) started\n", pid, ppid);
-            sleep(2);
+
+            sleep(5);
+
+            pid = getpid();
+            ppid = getppid();
             printf("child (pid=%i, ppid=%i) finished\n", pid, ppid);
 
             return 0;
