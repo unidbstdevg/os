@@ -5,6 +5,7 @@
 
 #include <readline/history.h>
 
+#include <fcntl.h>
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -31,11 +32,12 @@
 
 #define EXIT_WORD "exit"
 #define CD_WORD "cd"
+#define REDIRECT_WORD ">"
 #define PROMPT "box_to_process_commands> "
-#define MAX_ARGS_COUNT 5
+#define MAX_ARGS_COUNT 512
 
 void catch_sigint(int sig_num) {
-    printf("\nType 'exit' to exit\n");
+    printf("\nType 'exit' or press C-d to exit\n");
 
     // Regenerate the prompt on a newline
     rl_on_new_line();
@@ -63,7 +65,14 @@ int main() {
         char* linev[MAX_ARGS_COUNT];
         int linec = 0;
         linev[linec++] = strtok(line, " ");
+        int redirectsymboli = 0;
         while((linev[linec] = strtok(NULL, " "))) {
+            if(!redirectsymboli && linec > 0 &&
+               !strcmp(linev[linec], REDIRECT_WORD)) {
+                redirectsymboli = linec;
+                linev[linec] = NULL;
+            }
+
             linec++;
             if(linec == (MAX_ARGS_COUNT - 1)) {
                 printf("Warning: arguments limit reached. Tail cut\n");
@@ -71,6 +80,11 @@ int main() {
             }
         }
         linev[linec] = NULL;
+
+        if(redirectsymboli && redirectsymboli + 1 >= linec) {
+            printf("Error: no target to redirect to\n");
+            continue;
+        }
 
         if(linec > 0 && !strcmp(linev[0], CD_WORD)) {
             if(linec == 1) {
@@ -85,9 +99,17 @@ int main() {
 
         if(!fork()) {
             // child
+
+            if(redirectsymboli) {
+                char* filename = linev[redirectsymboli + 1];
+                printf("redir %s\n", filename);
+                int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+                dup2(fd, 1); /*дублируем дескриптор (на стандартный вывод)*/
+                close(fd); /*старый дескриптор больше не нужен*/
+            }
             execvp(linev[0], linev);
 
-            // all next is not reachable if execvp is ok
+            // if execvp is ok, all next is not reachable
 
             printf("Error: Command not found: %s\n", linev[0]);
 
