@@ -30,6 +30,7 @@
 */
 
 #define EXIT_WORD "exit"
+#define CD_WORD "cd"
 #define PROMPT "box_to_process_commands> "
 #define MAX_ARGS_COUNT 5
 
@@ -59,25 +60,36 @@ int main() {
 
         add_history(line);
 
-        char* argv[MAX_ARGS_COUNT];
-        int i = 0;
-        argv[i++] = strtok(line, " ");
-        while((argv[i] = strtok(NULL, " "))) {
-            i++;
-            if(i == (MAX_ARGS_COUNT - 1)) {
-                printf(":arguments limit reached. Tail cut\n");
+        char* linev[MAX_ARGS_COUNT];
+        int linec = 0;
+        linev[linec++] = strtok(line, " ");
+        while((linev[linec] = strtok(NULL, " "))) {
+            linec++;
+            if(linec == (MAX_ARGS_COUNT - 1)) {
+                printf("Warning: arguments limit reached. Tail cut\n");
                 break;
             }
         }
-        argv[i] = NULL;
+        linev[linec] = NULL;
+
+        if(linec > 0 && !strcmp(linev[0], CD_WORD)) {
+            if(linec == 1) {
+                printf("Usage: %s {path}\n", CD_WORD);
+                continue;
+            }
+            if(chdir(linev[1])) {
+                printf("Error: no such path: %s\n", linev[1]);
+            }
+            continue;
+        }
 
         if(!fork()) {
             // child
-            execvp(argv[0], argv);
+            execvp(linev[0], linev);
 
             // all next is not reachable if execvp is ok
 
-            printf("Error: Command not found: %s\n", argv[0]);
+            printf("Error: Command not found: %s\n", linev[0]);
 
             return 0;
         } else {
