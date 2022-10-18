@@ -10,6 +10,9 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <array>
+#include <vector>
+
 /*
 + 1. Сделать бесконечный цикл запросов строк на ввод. Придумать собственное
 +    слово для выхода (например, “by”). Когда пользователь вводит это слово —
@@ -33,8 +36,14 @@
 #define EXIT_WORD "exit"
 #define CD_WORD "cd"
 #define REDIRECT_WORD ">"
+#define PIPE_WORD "|"
 #define PROMPT "box_to_process_commands> "
 #define MAX_ARGS_COUNT 512
+
+template <typename T, std::size_t N>
+inline static decltype(auto) to_raw_array(const std::array<T, N>& arr_v) {
+    return reinterpret_cast<const T(&)[N]>(*arr_v.data());
+}
 
 void catch_sigint(int sig_num) {
     printf("\nType 'exit' or press C-d to exit\n");
@@ -62,15 +71,27 @@ int main() {
 
         add_history(line);
 
-        char* linev[MAX_ARGS_COUNT];
-        int linec = 0;
-        linev[linec++] = strtok(line, " ");
+        std::vector<std::array<char*, MAX_ARGS_COUNT>> piped_linev;
+
+        std::array<char*, MAX_ARGS_COUNT> linev;
+        linev[0] = strtok(line, " ");
+        int linec = 1;
+
+    start_parse_line:
         int redirectsymboli = 0;
         while((linev[linec] = strtok(NULL, " "))) {
             if(!redirectsymboli && linec > 0 &&
                !strcmp(linev[linec], REDIRECT_WORD)) {
                 redirectsymboli = linec;
                 linev[linec] = NULL;
+            }
+
+            if(!strcmp(linev[linec], PIPE_WORD)) {
+                linev[linec] = NULL;
+                printf("SHITTED\n");
+                piped_linev.push_back(linev);
+                linec = 0;
+                goto start_parse_line;
             }
 
             linec++;
@@ -97,6 +118,13 @@ int main() {
             continue;
         }
 
+        int pipe_channels[2];
+        if(!piped_linev.empty())
+            if(pipe(pipe_channels)) {
+                printf("Fatal error: Can't allocate pipes\n");
+                exit(2);
+            }
+
         if(!fork()) {
             // child
 
@@ -107,7 +135,7 @@ int main() {
                 dup2(fd, 1); /*дублируем дескриптор (на стандартный вывод)*/
                 close(fd); /*старый дескриптор больше не нужен*/
             }
-            execvp(linev[0], linev);
+            execvp(linev[0], to_raw_array(linev));
 
             // if execvp is ok, all next is not reachable
 
