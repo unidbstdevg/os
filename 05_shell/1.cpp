@@ -118,12 +118,19 @@ int main() {
             continue;
         }
 
-        int pipe_channels[2];
-        if(!piped_linev.empty())
+        std::vector<std::array<int, 2>> pipes;
+        for(int i = 0; i < piped_linev.size(); i++) {
+            int pipe_channels[2];
             if(pipe(pipe_channels)) {
                 printf("Fatal error: Can't allocate pipes\n");
                 exit(2);
             }
+
+            std::array<int, 2> ar;
+            std::move(std::begin(pipe_channels), std::end(pipe_channels),
+                      ar.begin());
+            pipes.push_back(ar);
+        }
 
         if(!fork()) {
             // child
@@ -148,6 +155,12 @@ int main() {
 
         // wait for child
         wait(0);
+
+        // close all pipes
+        for(auto& el : pipes) {
+            close(el[0]);
+            close(el[1]);
+        }
 
         // readline malloc'ed it
         free(line);
