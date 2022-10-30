@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 #include <array>
-#include <vector>
+#include <list>
 
 /*
 + 1. Сделать бесконечный цикл запросов строк на ввод. Придумать собственное
@@ -71,7 +71,7 @@ int main() {
 
         add_history(line);
 
-        std::vector<std::array<char*, MAX_ARGS_COUNT>> piped_linev;
+        std::list<std::array<char*, MAX_ARGS_COUNT>> piped_linev;
 
         std::array<char*, MAX_ARGS_COUNT> linev;
         linev[0] = strtok(line, " ");
@@ -102,6 +102,10 @@ int main() {
         }
         linev[linec] = NULL;
 
+        // TODO: rename piped_linev because it is now contains not only piped
+        // shits
+        piped_linev.push_back(linev);
+
         if(redirectsymboli && redirectsymboli + 1 >= linec) {
             printf("Error: no target to redirect to\n");
             continue;
@@ -118,49 +122,110 @@ int main() {
             continue;
         }
 
-        std::vector<std::array<int, 2>> pipes;
-        for(int i = 0; i < piped_linev.size(); i++) {
+        int last_pipe_descriptor = -1;
+        std::list<std::array<int, 2>> pipes;
+        for(int i = 1; i < piped_linev.size(); i++) {
             int pipe_channels[2];
             if(pipe(pipe_channels)) {
-                printf("Fatal error: Can't allocate pipes\n");
+                printf("Fatal error: Can't allocate pipe\n");
                 exit(2);
             }
+            last_pipe_descriptor = pipe_channels[1];
 
             std::array<int, 2> ar;
             std::move(std::begin(pipe_channels), std::end(pipe_channels),
                       ar.begin());
             pipes.push_back(ar);
+            // printf("DEBUG: vect: %i, %i\n", pipes.back()[0],
+            // pipes.back()[1]);
         }
 
-        if(!fork()) {
-            // child
+        // printf("DEBUG: pipes count: %lu\n", pipes.size());
 
-            if(redirectsymboli) {
-                char* filename = linev[redirectsymboli + 1];
-                printf("redir %s\n", filename);
-                int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-                dup2(fd, 1); /*дублируем дескриптор (на стандартный вывод)*/
-                close(fd); /*старый дескриптор больше не нужен*/
+        int count_childs = 0;
+        {
+            std::array<int, 2> prev_pip;
+            bool first_cmd = true;
+
+            while(true) {
+                // it is guaranteed that there is at least one element
+                linev = piped_linev.front();
+                piped_linev.pop_front();
+
+                bool empty_pipes = false;
+                std::array<int, 2> pip;
+                if(!pipes.empty()) {
+                    pip = pipes.front();
+                    pipes.pop_front();
+                } else {
+                    empty_pipes = true;
+                }
+
+                if(!fork()) {
+                    // child
+
+                    if(!empty_pipes) {
+                        // fprintf(stderr, "DEBUG: %s stdout to %i\n", linev[0],
+                        //         pip[1]);
+
+                        dup2(pip[1], STDOUT_FILENO);
+                        close(pip[1]);
+                    }
+
+                    if(!first_cmd) {
+                        // fprintf(stderr, "DEBUG: %s stdin to %i\n", linev[0],
+                        //         prev_pip[0]);
+
+                        dup2(prev_pip[0], STDIN_FILENO);
+                        close(prev_pip[0]);
+                    }
+
+                    if(empty_pipes && redirectsymboli) {
+                        char* filename = linev[redirectsymboli + 1];
+                        // printf("DEBUG: redirect output to %s\n", filename);
+                        int fd =
+                            open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+                        dup2(fd, STDOUT_FILENO);
+                        close(fd);
+                    }
+
+                    // close all pipes
+                    for(int i = 3; i <= last_pipe_descriptor; i++) {
+                        close(i);
+                    }
+
+                    execvp(linev[0], to_raw_array(linev));
+
+                    // if execvp is ok, all next is not reachable
+
+                    fprintf(stderr, "Error: Command not found: %s\n", linev[0]);
+
+                    return 0;
+                } else {
+                    // main
+                    count_childs++;
+                }
+
+                prev_pip = pip;
+                first_cmd = false;
+
+                // loop exit conditions
+                if(piped_linev.empty())
+                    break;
             }
-            execvp(linev[0], to_raw_array(linev));
-
-            // if execvp is ok, all next is not reachable
-
-            printf("Error: Command not found: %s\n", linev[0]);
-
-            return 0;
-        } else {
-            // main
         }
-
-        // wait for child
-        wait(0);
 
         // close all pipes
-        for(auto& el : pipes) {
-            close(el[0]);
-            close(el[1]);
+        for(int i = 3; i <= last_pipe_descriptor; i++) {
+            close(i);
         }
+
+        // wait for all childs
+        for(int i = 0; i < count_childs; i++) {
+            // printf("DEBUG: wait for %i\n", i);
+            wait(0);
+        }
+        // printf("DEBUG_WAIT: wait end\n");
 
         // readline malloc'ed it
         free(line);
