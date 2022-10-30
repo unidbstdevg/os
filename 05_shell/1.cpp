@@ -80,18 +80,18 @@ int main() {
     start_parse_line:
         int redirectsymboli = 0;
         while((linev[linec] = strtok(NULL, " "))) {
+            if(!strcmp(linev[linec], PIPE_WORD)) {
+                linev[linec] = NULL;
+                piped_linev.push_back(linev);
+                linec = 0;
+
+                goto start_parse_line;
+            }
+
             if(!redirectsymboli && linec > 0 &&
                !strcmp(linev[linec], REDIRECT_WORD)) {
                 redirectsymboli = linec;
                 linev[linec] = NULL;
-            }
-
-            if(!strcmp(linev[linec], PIPE_WORD)) {
-                linev[linec] = NULL;
-                printf("SHITTED\n");
-                piped_linev.push_back(linev);
-                linec = 0;
-                goto start_parse_line;
             }
 
             linec++;
