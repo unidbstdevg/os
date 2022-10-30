@@ -71,7 +71,7 @@ int main() {
 
         add_history(line);
 
-        std::list<std::array<char*, MAX_ARGS_COUNT>> piped_linev;
+        std::list<std::array<char*, MAX_ARGS_COUNT>> linevs;
 
         std::array<char*, MAX_ARGS_COUNT> linev;
         linev[0] = strtok(line, " ");
@@ -82,7 +82,7 @@ int main() {
         while((linev[linec] = strtok(NULL, " "))) {
             if(!strcmp(linev[linec], PIPE_WORD)) {
                 linev[linec] = NULL;
-                piped_linev.push_back(linev);
+                linevs.push_back(linev);
                 linec = 0;
 
                 goto start_parse_line;
@@ -102,9 +102,7 @@ int main() {
         }
         linev[linec] = NULL;
 
-        // TODO: rename piped_linev because it is now contains not only piped
-        // shits
-        piped_linev.push_back(linev);
+        linevs.push_back(linev);
 
         if(redirectsymboli && redirectsymboli + 1 >= linec) {
             printf("Error: no target to redirect to\n");
@@ -124,7 +122,7 @@ int main() {
 
         int last_pipe_descriptor = -1;
         std::list<std::array<int, 2>> pipes;
-        for(int i = 1; i < piped_linev.size(); i++) {
+        for(int i = 1; i < linevs.size(); i++) {
             int pipe_channels[2];
             if(pipe(pipe_channels)) {
                 printf("Fatal error: Can't allocate pipe\n");
@@ -149,8 +147,8 @@ int main() {
 
             while(true) {
                 // it is guaranteed that there is at least one element
-                linev = piped_linev.front();
-                piped_linev.pop_front();
+                linev = linevs.front();
+                linevs.pop_front();
 
                 bool empty_pipes = false;
                 std::array<int, 2> pip;
@@ -210,7 +208,7 @@ int main() {
                 first_cmd = false;
 
                 // loop exit conditions
-                if(piped_linev.empty())
+                if(linevs.empty())
                     break;
             }
         }
