@@ -29,16 +29,24 @@ void print_arr(int* arr, int N) {
     printf("\n");
 }
 
-// TODO: catch sigint
+int g_shm_fd = -1;
+
+void catch_sigint(int code) {
+    if(g_shm_fd != -1) {
+        shmctl(g_shm_fd, IPC_RMID, 0);
+    }
+    exit(code);
+}
 
 void mode_w(int N) {
-    int fd = shmget(IPC_PRIVATE, N * sizeof(int) + 1, IPC_CREAT | 0644);
-    if(fd < 0) {
+    g_shm_fd = shmget(IPC_PRIVATE, N * sizeof(int) + 1, IPC_CREAT | 0644);
+    if(g_shm_fd < 0) {
         printf("shmget() error on create\n");
         exit(2);
     }
+    signal(SIGINT, catch_sigint);
 
-    void* addr = shmat(fd, 0, 0);
+    void* addr = shmat(g_shm_fd, 0, 0);
     int* cur_id = (int*)addr;
     int* arr = (int*)addr + 1;
 
@@ -85,7 +93,7 @@ void mode_w(int N) {
     print_arr(arr, N);
 
     shmdt(addr);
-    shmctl(fd, IPC_RMID, 0);
+    shmctl(g_shm_fd, IPC_RMID, 0);
 }
 
 void mode_s(int N) {
