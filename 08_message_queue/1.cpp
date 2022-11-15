@@ -38,6 +38,21 @@ int mode_delete(int fd) {
     return 0;
 }
 
+int my_send(int fd, my_msgbuf* mobj) {
+    if(msgsnd(fd, mobj, strlen(mobj->mtext) + 1, IPC_NOWAIT) == -1) {
+        printf("Error on sending message\n");
+        return 5;
+    }
+    return 0;
+}
+int my_receive(int fd, my_msgbuf* mobj) {
+    if(msgrcv(fd, mobj, MSG_TEXT_MAX, 0, IPC_NOWAIT | MSG_NOERROR) == -1) {
+        printf("Error on receiving message\n");
+        return 5;
+    }
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     if(argc < 2) {
         print_usage(argv[0]);
@@ -73,8 +88,31 @@ int main(int argc, char* argv[]) {
     }
     int type = atoi(argv[2]);
 
-    printf("TODO\n");
-    return 33;
+    my_msgbuf mobj;
+
+    switch(mode) {
+    case 's':
+        // TODO: read user stdin
+        mobj = {type, "temptext"};
+        if(int ret = my_send(fd, &mobj)) {
+            return ret;
+        }
+        printf("Message sent\n");
+        break;
+    case 'r':
+        if(int ret = my_receive(fd, &mobj)) {
+            return ret;
+        }
+        printf("Message: %s\n", mobj.mtext);
+        break;
+    case 'p':
+        if(!my_receive(fd, &mobj) && !my_send(fd, &mobj)) {
+            printf("Message: %s\n", mobj.mtext);
+        } else {
+            return 5;
+        }
+        break;
+    }
 
     return 0;
 }
