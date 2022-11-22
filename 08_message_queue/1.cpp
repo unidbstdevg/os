@@ -1,9 +1,6 @@
-#include <stdio.h>
-#include <stdlib.h>
+#include <iostream>
+#include <string.h>
 #include <sys/msg.h>
-// #include <string.h>
-
-#include <readline/readline.h>
 
 #define MSG_QUEUE_UNIQ_KEY 72136
 #define MSG_TEXT_MAX 1024
@@ -53,6 +50,26 @@ int my_receive(int fd, my_msgbuf* mobj) {
     return 0;
 }
 
+void get_user_text(char* text, size_t size) {
+    printf("Enter your text: ");
+    int i = 0;
+    char ch = 0;
+    char pch = 0;
+    while((ch = fgetc(stdin)) != EOF) {
+        if(ch == '\n' && pch == '\n')
+            break;
+        pch = ch;
+
+        *(text++) = ch;
+
+        if(++i >= MSG_TEXT_MAX) {
+            break;
+        }
+    }
+    // -- to trim last newline
+    *(--text) = 0;
+}
+
 int main(int argc, char* argv[]) {
     if(argc < 2) {
         print_usage(argv[0]);
@@ -92,8 +109,9 @@ int main(int argc, char* argv[]) {
 
     switch(mode) {
     case 's':
-        // TODO: read user stdin
-        mobj = {type, "temptext"};
+        mobj.mtype = type;
+        get_user_text(mobj.mtext, MSG_TEXT_MAX);
+
         if(int ret = my_send(fd, &mobj)) {
             return ret;
         }
